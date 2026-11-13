@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Endless Focus">
+<meta property="og:title" content="Endless Focus">
+<meta property="og:description" content="Sorpassi nel traffico a tutta velocità. Gioca subito dal browser, anche su iPhone.">
+<meta property="og:image" content="https://cheipstudio-cmyk.github.io/endless-focus/index.icon.png">
+<meta property="og:url" content="https://cheipstudio-cmyk.github.io/endless-focus/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+
+<meta name="theme-color" content="#080a0f">
+<meta name="format-detection" content="telephone=no">
+<title>Endless Focus</title>
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png">
+<link rel="icon" href="index.icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<script>
+// keep the saves (IndexedDB) from being evicted by the browser when storage is tight
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+</script>
+<style>
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #080a0f; color: #fff;
+	overflow: hidden; position: fixed; inset: 0; overscroll-behavior: none; touch-action: none;
+	-webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+	font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+#canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; }
+#canvas:focus { outline: none; }
+#ef-boot { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+	background: radial-gradient(ellipse at 50% 35%, #1f2a44 0%, #0b0f1a 55%, #06070b 100%); z-index: 10; transition: opacity .45s ease; }
+#ef-boot.hide { opacity: 0; pointer-events: none; }
+#ef-logo { width: 34vw; max-width: 180px; border-radius: 22%; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+#ef-title { margin-top: 22px; font-weight: 900; font-style: italic; font-size: 30px; letter-spacing: .5px; }
+#ef-title b { color: #ff8a1f; }
+#ef-sub { margin-top: 6px; font-size: 13px; color: #9aa6bf; letter-spacing: 1.5px; text-transform: uppercase; }
+#ef-bar { margin-top: 34px; width: 62vw; max-width: 320px; height: 8px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; }
+#ef-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff7a00, #ffb340); border-radius: 6px; transition: width .2s linear; }
+#ef-pct { margin-top: 10px; font-size: 12px; color: #9aa6bf; letter-spacing: 1px; min-height: 16px; }
+#ef-tap { margin-top: 30px; padding: 16px 44px; border: 0; border-radius: 12px; background: linear-gradient(#ff9a2e, #ff7a00);
+	color: #fff; font-weight: 900; font-style: italic; font-size: 20px; letter-spacing: 1px; transform: skewX(-10deg);
+	box-shadow: 0 8px 24px rgba(255,122,0,.35); display: none; }
+#ef-tap span { display: inline-block; transform: skewX(10deg); }
+#ef-hint { margin-top: 18px; font-size: 12px; color: #7f8aa3; text-align: center; max-width: 80vw; line-height: 1.5; display: none; }
+#ef-err { margin-top: 18px; font-size: 13px; color: #ff6b6b; text-align: center; max-width: 84vw; display: none; }
+</style>
+<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
+<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+
+</head>
+<body>
+<canvas id="canvas">Your browser does not support WebGL2.</canvas>
+<div id="ef-boot">
+	<img id="ef-logo" src="index.icon.png" alt="">
+	<div id="ef-title">ENDLESS <b>FOCUS</b></div>
+	<div id="ef-sub">Web edition</div>
+	<div id="ef-bar"><div id="ef-fill"></div></div>
+	<div id="ef-pct"></div>
+	<button id="ef-tap"><span>TAP TO START</span></button>
+	<div id="ef-hint">Per giocarlo a schermo intero su iPhone: Condividi &rarr; Aggiungi alla schermata Home</div>
+	<div id="ef-err"></div>
+</div>
+<script>
+// ---- split-file loader: artifact hosting caps files at 20 MiB, so index.wasm / index.pck are served
+// as numbered parts and reassembled here before the engine sees them.
+window.EF_PARTS = {"index.wasm": {"size": 43699190, "parts": ["index_wasm_000.wasm", "index_wasm_001.wasm", "index_wasm_002.wasm"]}, "index.pck": {"size": 73701232, "parts": ["index_pck_000.wasm", "index_pck_001.wasm", "index_pck_002.wasm", "index_pck_003.wasm"]}};
+(function () {
+	const origFetch = window.fetch.bind(window);
+	const total = Object.values(window.EF_PARTS).reduce((a, p) => a + p.size, 0);
+	const got = {};
+	function report() {
+		if (!total) return;
+		let s = 0; for (const k in got) s += got[k];
+		const pct = Math.min(100, Math.floor(s * 100 / total));
+		document.getElementById('ef-fill').style.width = pct + '%';
+		document.getElementById('ef-pct').textContent = 'Download ' + pct + '%  ·  ' + (s / 1048576).toFixed(0) + ' / ' + (total / 1048576).toFixed(0) + ' MB';
+	}
+	async function readPart(url, key) {
+		const r = await origFetch(url, { cache: 'force-cache' });
+		if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url);
+		if (!r.body || !r.body.getReader) { const b = await r.arrayBuffer(); got[key] = b.byteLength; report(); return new Uint8Array(b); }
+		const rd = r.body.getReader(); const chunks = []; let n = 0;
+		for (;;) { const { done, value } = await rd.read(); if (done) break; chunks.push(value); n += value.byteLength; got[key] = n; report(); }
+		const out = new Uint8Array(n); let o = 0; for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+		return out;
+	}
+	const cache = {};
+	function assemble(name) {
+		if (cache[name]) return cache[name];
+		const info = window.EF_PARTS[name];
+		cache[name] = Promise.all(info.parts.map((p, i) => readPart(p, name + i))).then((arr) => {
+			const out = new Uint8Array(info.size); let o = 0; for (const a of arr) { out.set(a, o); o += a.byteLength; }
+			return out;
+		});
+		return cache[name];
+	}
+	window.EF_prefetch = function () { for (const k in window.EF_PARTS) assemble(k); };
+	window.fetch = function (input, init) {
+		const url = (typeof input === 'string') ? input : (input && input.url) || '';
+		const name = url.split('?')[0].split('/').pop();
+		if (window.EF_PARTS[name]) {
+			return assemble(name).then((buf) => new Response(buf, { status: 200, headers: {
+				'Content-Type': name.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream',
+				'Content-Length': String(buf.byteLength) } }));
+		}
+		return origFetch(input, init);
+	};
+})();
+// keep a handle on the wasm memory (diagnostics: window.EF_memMB())
+(function () {
+	const grab = (r) => { try { const inst = r.instance || r; const m = inst.exports && (inst.exports.memory || inst.exports.wasmMemory); if (m) window.EF_wasmMem = m; } catch (e) {} return r; };
+	const oi = WebAssembly.instantiate, os = WebAssembly.instantiateStreaming;
+	WebAssembly.instantiate = function () { return oi.apply(WebAssembly, arguments).then(grab); };
+	if (os) WebAssembly.instantiateStreaming = function () { return os.apply(WebAssembly, arguments).then(grab); };
+	window.EF_memMB = () => window.EF_wasmMem ? Math.round(window.EF_wasmMem.buffer.byteLength / 1048576) : -1;
+})();
+// no page gestures: pinch zoom, double-tap zoom, long-press menu, pull to refresh
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || e.target === document.body) e.preventDefault(); }, { passive: false });
+</script>
+<script src="index.js"></script>
+<script>
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":73701232,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_THREADS_ENABLED = false;
+const engine = new Engine(GODOT_CONFIG);
+(function () {
+	const boot = document.getElementById('ef-boot');
+	const tap = document.getElementById('ef-tap');
+	const hint = document.getElementById('ef-hint');
+	const err = document.getElementById('ef-err');
+	function fail(msg) { err.style.display = 'block'; err.textContent = String(msg); tap.style.display = 'none'; }
+	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+	if (missing.length) { fail('Browser non supportato: ' + missing.join(', ')); return; }
+	const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+	const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+	if (ios && !standalone) hint.style.display = 'block';
+	// download while the player reads the screen; the engine starts on the first tap (iOS needs a
+	// user gesture to unlock audio)
+	if (window.EF_prefetch) window.EF_prefetch();
+	tap.style.display = 'inline-block';
+	let started = false;
+	function start() {
+		if (started) return; started = true;
+		tap.style.display = 'none'; hint.style.display = 'none';
+		try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { const c = new AC(); c.resume(); c.close(); } } catch (e) {}
+		const de = document.documentElement;
+		if (!ios && de.requestFullscreen) { de.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); }
+		engine.startGame({
+			onProgress: function (cur, tot) { },
+		}).then(() => {
+			setTimeout(() => { boot.classList.add('hide'); setTimeout(() => boot.remove(), 600); }, 300);
+			document.getElementById('canvas').focus();
+		}, fail);
+	}
+	tap.addEventListener('click', start);
+	tap.addEventListener('touchend', (e) => { e.preventDefault(); start(); });
+})();
+</script>
+</body>
+</html>
+
