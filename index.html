@@ -65,9 +65,22 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #080a
 	<div id="ef-err"></div>
 </div>
 <script>
+// WEB-IOS: phones report a pixel ratio of 3: the engine canvas was ~1170x2530 px, too much fill
+// for Safari's WebGL (lag, heat, tab crash, worse in the home-screen app which is taller).
+// Cap the ratio the engine sees; CSS layout is unchanged.
+(function () {
+	try {
+		const ua = navigator.userAgent;
+		const mob = /iPhone|iPad|iPod|Android/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+		const real = window.devicePixelRatio || 1;
+		if (mob && real > 1.75) Object.defineProperty(window, 'devicePixelRatio', { get: () => 1.75, configurable: true });
+	} catch (e) {}
+})();
+</script>
+<script>
 // ---- split-file loader: artifact hosting caps files at 20 MiB, so index.wasm / index.pck are served
 // as numbered parts and reassembled here before the engine sees them.
-window.EF_PARTS = {"index.wasm": {"size": 43699190, "parts": ["index_wasm_000.wasm", "index_wasm_001.wasm", "index_wasm_002.wasm"]}, "index.pck": {"size": 73701232, "parts": ["index_pck_000.wasm", "index_pck_001.wasm", "index_pck_002.wasm", "index_pck_003.wasm"]}};
+window.EF_PARTS = {"index.wasm": {"size": 43699190, "parts": ["index_wasm_000.wasm?v=b04288450b", "index_wasm_001.wasm?v=8d52ba295b", "index_wasm_002.wasm?v=0bb7e8a433"]}, "index.pck": {"size": 73703440, "parts": ["index_pck_000.wasm?v=f0f0667f84", "index_pck_001.wasm?v=3777c649e7", "index_pck_002.wasm?v=b054dc635a", "index_pck_003.wasm?v=d61f0ba70c"]}};
 (function () {
 	const origFetch = window.fetch.bind(window);
 	const total = Object.values(window.EF_PARTS).reduce((a, p) => a + p.size, 0);
@@ -103,7 +116,9 @@ window.EF_PARTS = {"index.wasm": {"size": 43699190, "parts": ["index_wasm_000.wa
 		const url = (typeof input === 'string') ? input : (input && input.url) || '';
 		const name = url.split('?')[0].split('/').pop();
 		if (window.EF_PARTS[name]) {
-			return assemble(name).then((buf) => new Response(buf, { status: 200, headers: {
+			// WEB-IOS memory: the engine copies the data into its own file system: drop our copy
+			// (the pck is ~75 MB; keeping it doubled the page's memory and Safari killed the tab)
+			return assemble(name).then((buf) => { delete cache[name]; return buf; }).then((buf) => new Response(buf, { status: 200, headers: {
 				'Content-Type': name.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream',
 				'Content-Length': String(buf.byteLength) } }));
 		}
@@ -126,7 +141,7 @@ document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || e.ta
 </script>
 <script src="index.js"></script>
 <script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":73701232,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":73703440,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 (function () {
