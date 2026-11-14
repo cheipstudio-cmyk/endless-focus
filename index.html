@@ -80,7 +80,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #080a
 <script>
 // ---- split-file loader: artifact hosting caps files at 20 MiB, so index.wasm / index.pck are served
 // as numbered parts and reassembled here before the engine sees them.
-window.EF_PARTS = {"index.wasm": {"size": 43699190, "parts": ["index_wasm_000.wasm?v=b04288450b", "index_wasm_001.wasm?v=8d52ba295b", "index_wasm_002.wasm?v=0bb7e8a433"]}, "index.pck": {"size": 73703440, "parts": ["index_pck_000.wasm?v=f0f0667f84", "index_pck_001.wasm?v=3777c649e7", "index_pck_002.wasm?v=b054dc635a", "index_pck_003.wasm?v=d61f0ba70c"]}};
+window.EF_PARTS = {"index.wasm": {"size": 41848195, "parts": ["index_wasm_000.wasm?v=c774710bb1", "index_wasm_001.wasm?v=13aacddb9a", "index_wasm_002.wasm?v=43288d3611"]}, "index.pck": {"size": 73704816, "parts": ["index_pck_000.wasm?v=4dc7fee2fb", "index_pck_001.wasm?v=3777c649e7", "index_pck_002.wasm?v=b43a1b7310", "index_pck_003.wasm?v=2d732da11d"]}};
 (function () {
 	const origFetch = window.fetch.bind(window);
 	const total = Object.values(window.EF_PARTS).reduce((a, p) => a + p.size, 0);
@@ -141,8 +141,8 @@ document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || e.ta
 </script>
 <script src="index.js"></script>
 <script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":73703440,"index.wasm":43699190},"focusCanvas":true,"gdextensionLibs":[]};
-const GODOT_THREADS_ENABLED = false;
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":73704816,"index.wasm":41848195},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_THREADS_ENABLED = true;
 const engine = new Engine(GODOT_CONFIG);
 (function () {
 	const boot = document.getElementById('ef-boot');
@@ -151,7 +151,25 @@ const engine = new Engine(GODOT_CONFIG);
 	const err = document.getElementById('ef-err');
 	function fail(msg) { err.style.display = 'block'; err.textContent = String(msg); tap.style.display = 'none'; }
 	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
-	if (missing.length) { fail('Browser non supportato: ' + missing.join(', ')); return; }
+	if (missing.length) {
+		// WEB-THREADS: the threaded build needs cross-origin isolation; the host can't send the
+		// headers, so a tiny service worker adds them. First visit: install it and reload once.
+		if (GODOT_THREADS_ENABLED && !window.crossOriginIsolated && 'serviceWorker' in navigator && window.isSecureContext) {
+			let tries = 0; try { tries = parseInt(sessionStorage.getItem('ef_coi') || '0'); } catch (e) {}
+			if (tries < 2) {
+				try { sessionStorage.setItem('ef_coi', String(tries + 1)); } catch (e) {}
+				document.getElementById('ef-pct').textContent = 'Preparazione...';
+				navigator.serviceWorker.register('coi-sw.js').then((reg) => {
+					const go = () => window.location.reload();
+					if (reg.active && navigator.serviceWorker.controller) { go(); return; }
+					navigator.serviceWorker.ready.then(() => setTimeout(go, 150));
+				}).catch((e) => fail('Service worker: ' + e));
+				return;
+			}
+		}
+		fail('Browser non supportato: ' + missing.join(', ') + '. Aggiorna il browser e riapri la pagina.'); return;
+	}
+	try { sessionStorage.removeItem('ef_coi'); } catch (e) {}
 	const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 	const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
 	if (ios && !standalone) hint.style.display = 'block';
@@ -166,7 +184,9 @@ const engine = new Engine(GODOT_CONFIG);
 		try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) { const c = new AC(); c.resume(); c.close(); } } catch (e) {}
 		const de = document.documentElement;
 		if (!ios && de.requestFullscreen) { de.requestFullscreen({ navigationUI: 'hide' }).catch(() => {}); }
+		const qa = []; try { const pr = new URLSearchParams(location.search).get('perfrun'); if (pr) qa.push('--', '--perfrun=' + pr); } catch (e) {}
 		engine.startGame({
+			args: qa,
 			onProgress: function (cur, tot) { },
 		}).then(() => {
 			setTimeout(() => { boot.classList.add('hide'); setTimeout(() => boot.remove(), 600); }, 300);
