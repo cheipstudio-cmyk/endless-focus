@@ -1,0 +1,18 @@
+name: fetch-billing-libs
+on:
+  push:
+    branches: [billing-libs]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 fetch.py
+      - run: cat ~/ef_billing/log.txt
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete billing-libs -y --cleanup-tag -R ${{ github.repository }} || true
+          gh release create billing-libs ef_billing.zip -R ${{ github.repository }} --target billing-libs --prerelease -t "billing libs (build input)" -n "Play Billing 9.1.0 + deps + r8, fetched from Google Maven"
