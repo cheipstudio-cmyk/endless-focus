@@ -15,4 +15,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete billing-libs -y --cleanup-tag -R ${{ github.repository }} || true
-          gh release create billing-libs ef_billing.zip -R ${{ github.repository }} --target billing-libs --prerelease -t "billing libs (build input)" -n "Play Billing 9.1.0 + deps + r8, fetched from Google Maven"
+          gh release create billing-libs ~/ef_billing.zip -R ${{ github.repository }} --target billing-libs --prerelease -t "billing libs (build input)" -n "Play Billing 9.1.0 + deps + r8, fetched from Google Maven"
